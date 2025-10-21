@@ -5,8 +5,9 @@ account: ntorresh
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 15814161
-bundleId: 11062442
+bundleId: 11067427
 url: https://ntorresh.shinyapps.io/tesis-portafolio-app/
 version: 1
 asMultiple: FALSE
 asStatic: FALSE
+ignoredFiles: shiny.pdf

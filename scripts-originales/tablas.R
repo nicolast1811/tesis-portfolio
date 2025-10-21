@@ -1,3 +1,4 @@
+library(stringr)
 # Tabla 1: Definición de muestra a trabajar ----
 matricula_por_slep <- matricula_final %>%
   filter(AGNO_TOTAL==2024) %>% 
@@ -17,8 +18,7 @@ tabla_muestra_slep <- muestra %>%
   add_row(
     `Nombre SLEP` = "Total",
     n = sum(.$n),
-    Porcentaje = 100,
-    Matrícula = sum(.$Matrícula, na.rm = TRUE)
+    Porcentaje = 100
   ) %>%
   rename(`Nº Establecimientos` = n) %>%
   mutate(
@@ -54,8 +54,7 @@ tabla_muestra_slep <- muestra %>%
     )
   ) %>%
   relocate(`Año Inicio de Funciones`, .after = `Nombre SLEP`) %>%  # Mueve la columna
-  arrange(as.numeric(`Año Inicio de Funciones`)) %>% # Ordena cronológicamente
-  mutate(Matrícula = format(Matrícula, big.mark = ".", decimal.mark = ","))
+  arrange(as.numeric(`Año Inicio de Funciones`))
 
 
 
