@@ -1,5 +1,4 @@
 # Shiny Web App
-
 library(shiny)
 library(dplyr)
 library(ggplot2)
@@ -8,7 +7,7 @@ library(plotly)
 library(stringr)
 library(DT)
 library(sf)
-
+library(leaflet)
 
 # ---- Elementos estéticos ----
 nord_aurora_colors <- list(
@@ -85,7 +84,7 @@ muestra <- read.csv("datos/muestra.csv")
 resumen_cluster <- read.csv("datos/resumen_cluster.csv")
 simce_long <- read.csv("datos/simce_long.csv")
 
-# Tabla 1: Definición de muestra a trabajar ----
+# ---- Tabla 1: Definición de muestra a trabajar ----
 tabla_1 <- muestra %>%
   mutate(NOMBRE_SLEP = str_to_title(NOMBRE_SLEP)) %>% 
   count(NOMBRE_SLEP, sort = TRUE) %>%
@@ -126,6 +125,7 @@ tabla_1 <- muestra %>%
   relocate(`Año Inicio de Funciones`, .after = `Nombre SLEP`) %>%
   arrange(as.numeric(`Año Inicio de Funciones`))
 
+# ---- Para gráficos geoespaciales ----
 chile_regiones <- st_read("datos/Regiones/Regional.shp")
 chile_provincias <- st_read("datos/Provincias/Provincias.shp")
 chile_comunas <- st_read("datos/Comunas/comunas.shp")
@@ -137,20 +137,6 @@ reg_comuna <- chile_comunas %>%
   left_join(muestra, by = c("cod_comuna", "codregion"))
 
 
-
-map_slep <- ggplot() +
-  geom_sf(data = chile_regiones, fill = NA, color = "grey70") +
-  geom_sf(data = chile_comunas, fill = NA, color = "grey85") +
-  geom_sf(data = reg_comuna %>% filter(!is.na(AGNO)),
-          aes(fill = Region)) +
-  scale_fill_discrete(name = "Región") +
-  guides(fill = guide_legend(override.aes = list(color = NA))) +
-  theme_void() +
-  theme(
-    legend.position = c(0.95, 0.1),
-    legend.key.size = unit(0.5, "lines"),
-    legend.text = element_text(size = 7)
-  )
 
 # Shiny APP
 
@@ -183,6 +169,7 @@ ui <- fluidPage(
 )
 
 server <- function(input, output, session) {
+  # Línea de tiempo matrícula SLEPS 17-24
   output$matriculaPlot <- renderPlotly({
     p <- matricula_final %>%
       filter(NOMBRE_SLEP_MUESTRA %in% input$sleps) %>%
@@ -210,55 +197,45 @@ server <- function(input, output, session) {
     ggplotly(p, tooltip = c("text")) %>% 
       style(hoverinfo = "text")
   })
-  
+  # Tabla detalles SLEP
   output$tabla_detalles_slep <- DT::renderDT({
     tabla_1 %>% 
       filter(`Nombre SLEP` %in% str_to_title(input$sleps))
   }, rownames = FALSE, options = list(pageLength = 10, autoWidth = TRUE))
-    output$mapa <- renderPlot({
-    slep_comunas <- reg_comuna %>% filter(NOMBRE_SLEP == input$sleps, !is.na(AGNO))
+
+  output$mapa <- renderPlot({
+    # Mapa de Chile, comunas coloreadas según SLEP
+    slep_comunas <- reg_comuna %>% filter(NOMBRE_SLEP %in% input$sleps, !is.na(AGNO))
     slep_region_codes <- unique(slep_comunas$codregion)
     slep_regiones <- chile_regiones %>% filter(codregion %in% slep_region_codes)
     slep_comunas_outline <- chile_comunas %>% filter(codregion %in% slep_region_codes)
+    seleccionados <- colores_slep[match(input$sleps, names(colores_slep))]
+    otros_regiones <- chile_regiones %>% filter(!codregion %in% slep_region_codes)
+
     ggplot() +
+      geom_sf(data = otros_regiones, fill = NA, color = "grey70", alpha = 0.2) +
       geom_sf(data = slep_regiones, fill = NA, color = "grey70") +
-      geom_sf(data = slep_comunas_outline, fill = NA, color = "grey85") +
-      geom_sf(data = slep_comunas, aes(fill = Region)) +
-      scale_fill_discrete(name = "Región") +
+      geom_sf(data = chile_comunas, fill = NA, color = "grey85") +
+      geom_sf(data = slep_comunas, aes(fill = NOMBRE_SLEP)) +
+      scale_fill_manual(values = c("grey90", seleccionados)) +
       guides(fill = guide_legend(override.aes = list(color = NA))) +
       theme_void() +
       theme(
         legend.position = c(0.95, 0.1),
-        legend.key.size = unit(0.5, "lines"),
-        legend.text = element_text(size = 7)
-      ) +
-      coord_sf(xlim = st_bbox(slep_regiones)[c("xmin", "xmax")],
-               ylim = st_bbox(slep_regiones)[c("ymin", "ymax")])
-  })
-    
-    output$mapa <- renderPlot({
-      slep_comunas <- reg_comuna %>% filter(NOMBRE_SLEP %in% input$sleps, !is.na(AGNO))
-      slep_region_codes <- unique(slep_comunas$codregion)
-      slep_regiones <- chile_regiones %>% filter(codregion %in% slep_region_codes)
-      slep_comunas_outline <- chile_comunas %>% filter(codregion %in% slep_region_codes)
-      
-      seleccionados <- colores_slep[match(input$sleps, names(colores_slep))]
-      
-      ggplot() +
-        geom_sf(data = slep_regiones, fill = NA, color = "grey70") +
-        geom_sf(data = slep_comunas_outline, fill = NA, color = "grey85") +
-        geom_sf(data = slep_comunas, aes(fill = NOMBRE_SLEP)) +
-        scale_fill_manual(values = c("grey90", seleccionados)) +
-        guides(fill = guide_legend(override.aes = list(color = NA))) +
-        theme_void() +
-        theme(
-          legend.position = c(0.95, 0.1),
           legend.key.size = unit(0.5, "lines"),
           legend.text = element_text(size = 7)
         ) +
-        coord_sf(xlim = st_bbox(slep_regiones)[c("xmin", "xmax")],
-                 ylim = st_bbox(slep_regiones)[c("ymin", "ymax")])
+      coord_sf(xlim = st_bbox(slep_regiones)[c("xmin", "xmax")],
+               ylim = st_bbox(slep_regiones)[c("ymin", "ymax")],
+               expand = FALSE)
     })
+  
+
+  
+  
+  
 }
+
+
 
 shinyApp(ui, server)
